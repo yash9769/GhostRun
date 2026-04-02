@@ -1,4 +1,4 @@
-# CheckBeforeInstall — Local APK Sandbox (V1)
+# Ghostrun — Local APK Sandbox (V1)
 
 A minimal, standalone Python sandbox that installs an APK on an Android emulator,
 observes it for 10 seconds, and returns a structured JSON report.

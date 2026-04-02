@@ -1,6 +1,6 @@
 """
 main.py
-CLI entry point for CheckBeforeInstall sandbox (V1).
+CLI entry point for Ghostrun sandbox (V1).
 
 Usage:
     python main.py path/to/app.apk
@@ -18,7 +18,7 @@ from analyzer import SandboxAnalyzer
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="sandbox",
-        description="CheckBeforeInstall — Local APK Sandbox (V1)",
+        description="Ghostrun — Local APK Sandbox (V1)",
     )
     parser.add_argument(
         "apk",
@@ -48,7 +48,7 @@ def main():
             result = SandboxAnalyzer(args.apk, output_dir=args.output).run()
     else:
         print("=" * 60)
-        print("  CheckBeforeInstall — APK Sandbox")
+        print("  Ghostrun — APK Sandbox")
         print("=" * 60)
         result = SandboxAnalyzer(args.apk, output_dir=args.output).run()
         print("=" * 60)

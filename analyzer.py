@@ -1,6 +1,6 @@
 """
 analyzer.py
-Orchestrates the APK analysis pipeline for CheckBeforeInstall.
+Orchestrates the APK analysis pipeline for Ghostrun.
 This module is the single callable unit that main.py and (later) the backend API will use.
 """
 

@@ -1,6 +1,6 @@
 """
 adb_utils.py
-Core ADB command wrappers for CheckBeforeInstall sandbox.
+Core ADB command wrappers for Ghostrun sandbox.
 All functions return (stdout, stderr, returncode) tuples.
 """
 

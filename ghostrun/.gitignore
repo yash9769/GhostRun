@@ -1,0 +1,46 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android
+.gradle/
+local.properties
+*.kwks
+*.keystore
+*.jks
+*.properties
+!gradle-wrapper.properties
+
+# iOS/macOS
+Pods/
+.symlinks/
+DerivedData/
+*.framework
+*.otool
+*.xcworkspace
+!Runner.xcworkspace
+*.xcscheme
+!Runner.xcscheme
+*.xcuserstate
+*.xccheckout
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
+xcuserdata/
+
+# OS/IDEs
+.DS_Store
+.idea/
+.history
+.vscode/
+*.swp
+*.lock
+*.log

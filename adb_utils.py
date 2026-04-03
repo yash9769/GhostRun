@@ -68,7 +68,7 @@ def install_apk(apk_path: str) -> tuple[bool, str]:
         return False, f"APK not found: {apk_path}"
 
     print(f"[adb] Installing {apk_path} ...")
-    stdout, stderr, rc = run_cmd(["adb", "install", "-r", "--bypass-low-target-sdk-block", apk_path], timeout=90)
+    stdout, stderr, rc = run_cmd(["adb", "install", "-r", "--bypass-low-target-sdk-block", apk_path], timeout=300)
 
     combined = (stdout + stderr).lower()
     if rc == 0 and "success" in combined:

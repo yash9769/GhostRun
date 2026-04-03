@@ -80,22 +80,26 @@ class SandboxAnalyzer:
             return self._fail(result, f"Failed to launch app: {msg}")
         print("[analyzer] App launched. Observing for 10 seconds ...")
 
-        # ── Step 7: Screenshot (take after ~3s so app has time to render) ─────
-        time.sleep(3)
-        screenshot_path = os.path.join(
-            self.output_dir,
-            f"screen_{package}_{self._timestamp()}.png",
-        )
-        shot_ok, shot_result = adb_utils.take_screenshot(screenshot_path)
-        if shot_ok:
-            result["screenshots"].append(shot_result)
-            print(f"[analyzer] Screenshot saved: {shot_result}")
-        else:
-            print(f"[analyzer] Screenshot warning: {shot_result}")
+        # ── Step 7: Multi-Screenshot & Observation Phase ──────────────────────
+        print("[analyzer] Observing app & capturing 4 screenshots ...")
+        observation_intervals = [2, 3, 3, 3]  # Intervals in seconds: 2s, 5s, 8s, 11s
+        
+        for i, interval in enumerate(observation_intervals):
+            time.sleep(interval)
+            
+            shot_name = f"screen_{package}_t{sum(observation_intervals[:i+1])}s_{self._timestamp()}.png"
+            screenshot_path = os.path.join(self.output_dir, shot_name)
+            
+            shot_ok, shot_result = adb_utils.take_screenshot(screenshot_path)
+            if shot_ok:
+                result["screenshots"].append(shot_result)
+                print(f"[analyzer] Screenshot {i+1}/4 saved: {shot_result}")
+            else:
+                print(f"[analyzer] Screenshot {i+1}/4 warning: {shot_result}")
 
-        # ── Step 8: Capture logcat (waits remaining ~7s) ──────────────────────
-        print("[analyzer] Capturing logcat ...")
-        result["logs"] = adb_utils.capture_logcat(duration=7, package=package)
+        # ── Step 8: Capture logcat (dump current buffer) ──────────────────────
+        print("[analyzer] Finalizing logcat dump ...")
+        result["logs"] = adb_utils.capture_logcat(duration=0, package=package)
 
         # ── Step 9: Cleanup ───────────────────────────────────────────────────
         self._cleanup(package)

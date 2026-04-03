@@ -1,0 +1,14 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+*.pyc
+*.pyo
+.env
+
+# Flutter
+ghostrun/.dart_tool/
+ghostrun/build/
+ghostrun/.flutter-plugins
+ghostrun/.flutter-plugins-dependencies
+ghostrun/pubspec.lock

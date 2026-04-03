@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ghost_widgets.dart';
 import '../widgets/radar_widget.dart';
+import '../api_service.dart';
 
 class ScanAnalyzingScreen extends StatefulWidget {
   final VoidCallback onNext;
@@ -26,19 +27,38 @@ class _ScanAnalyzingScreenState extends State<ScanAnalyzingScreen> {
   @override
   void initState() {
     super.initState();
-    _autoAdvance();
+    _startRealScan();
   }
 
-  void _autoAdvance() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    setState(() => _stepIndex = 1);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    setState(() => _stepIndex = 2);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    widget.onNext();
+  void _startRealScan() async {
+    try {
+      // 1. Kick off the scan on the Python Backend
+      final res = await ApiService.startScan('user_123');
+      final scanId = res['scan_id'];
+      if (scanId == null) return;
+
+      // 2. Poll the API for status updates mimicking our UI flow
+      while (mounted) {
+        await Future.delayed(const Duration(seconds: 1));
+        final statusRes = await ApiService.getScanStatus(scanId);
+        final status = statusRes['status'];
+        
+        if (!mounted) break;
+
+        if (status == 'sandbox') {
+          setState(() => _stepIndex = 1);
+        } else if (status == 'finding_vulnerabilities') {
+          setState(() => _stepIndex = 2);
+        } else if (status == 'completed' || status == 'failed') {
+          widget.onNext();
+          break;
+        }
+      }
+    } catch (e) {
+      print('API Error: $e');
+      // Fallback for safety so app doesn't freeze if server crashes
+      widget.onNext();
+    }
   }
 
   @override

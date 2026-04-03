@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ghost_widgets.dart';
+import '../api_service.dart';
 
 class NewsScreen extends StatelessWidget {
   final VoidCallback? onViewAll;
@@ -34,69 +35,36 @@ class NewsScreen extends StatelessWidget {
                     style: AppTheme.bodyM,
                   ),
                   const SizedBox(height: 24),
-                  _articleCard(
-                    icon: Icons.record_voice_over_rounded,
-                    iconBg: AppTheme.accentBlue.withOpacity(0.15),
-                    iconColor: AppTheme.accentBlue,
-                    tag: 'NEW THREAT',
-                    tagColor: AppTheme.accentBlue,
-                    title: 'Deepfake Voice Scams',
-                    body:
-                        'Scammers use AI to mimic the voice of a loved one or boss. If you receive an urgent call for money, hang up and call them back on their known number to verify.',
-                    footer: 'LEARN MORE →',
-                    isLearnMore: true,
+                  FutureBuilder<List<dynamic>>(
+                    future: ApiService.fetchNews(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      } else if (snapshot.hasError) {
+                        return Center(child: Text('Error loading news', style: AppTheme.bodyM));
+                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return Center(child: Text('No news available.', style: AppTheme.bodyM));
+                      }
+
+                      return Column(
+                        children: snapshot.data!.map((newsIdx) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 14.0),
+                            child: _articleCard(
+                              icon: Icons.article_outlined,
+                              iconBg: AppTheme.accentBlue.withOpacity(0.15),
+                              iconColor: AppTheme.accentBlue,
+                              tag: newsIdx['source'] ?? 'NEWS',
+                              title: newsIdx['title'] ?? '',
+                              body: newsIdx['content'] ?? '',
+                              footer: 'READ MORE →',
+                              isLearnMore: true,
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
                   ),
-                  const SizedBox(height: 14),
-                  _articleCard(
-                    icon: Icons.link_off_rounded,
-                    iconBg: AppTheme.accentOrange.withOpacity(0.15),
-                    iconColor: AppTheme.accentOrange,
-                    tag: '',
-                    title: 'The "Package Pending" Text',
-                    body:
-                        'A classic trick where you get a text about a failed delivery. Never click the link to "re-schedule." Official couriers will never ask for personal info via text links.',
-                    footer: '2 DAYS AGO',
-                    isLearnMore: false,
-                  ),
-                  const SizedBox(height: 14),
-                  _articleCard(
-                    icon: Icons.qr_code_rounded,
-                    iconBg: AppTheme.accentBlueDim.withOpacity(0.2),
-                    iconColor: AppTheme.accentBluePale,
-                    tag: '',
-                    title: 'Quishing',
-                    body:
-                        'Fake QR codes at restaurants or parking meters that lead to stolen credit card forms.',
-                    footer: '',
-                    isLearnMore: false,
-                  ),
-                  const SizedBox(height: 14),
-                  _articleCard(
-                    icon: Icons.warning_amber_rounded,
-                    iconBg: AppTheme.accentRed.withOpacity(0.15),
-                    iconColor: AppTheme.accentRed,
-                    tag: '',
-                    title: 'Urgent Update',
-                    body:
-                        'Avoid pop-ups claiming your "System is Infected." Close the browser tab immediately.',
-                    footer: '',
-                    isLearnMore: false,
-                  ),
-                  const SizedBox(height: 14),
-                  _articleCard(
-                    icon: Icons.fingerprint_rounded,
-                    iconBg: AppTheme.accentBlue.withOpacity(0.1),
-                    iconColor: AppTheme.accentBlue,
-                    tag: '',
-                    title: '2FA Social Engineering',
-                    body:
-                        'If someone asks for a code that was just sent to your phone, it\'s a scam. No legitimate company will ever ask for your security codes.',
-                    footer: '',
-                    isLearnMore: false,
-                    proTip:
-                        'Switch from SMS codes to an Authenticator app for maximum safety.',
-                  ),
-                  const SizedBox(height: 24),
                 ],
               ),
             ),

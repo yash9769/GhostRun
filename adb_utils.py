@@ -7,6 +7,7 @@ All functions return (stdout, stderr, returncode) tuples.
 import subprocess
 import time
 import os
+from typing import Optional
 
 
 def run_cmd(args: list[str], timeout: int = 30) -> tuple[str, str, int]:
@@ -67,7 +68,7 @@ def install_apk(apk_path: str) -> tuple[bool, str]:
         return False, f"APK not found: {apk_path}"
 
     print(f"[adb] Installing {apk_path} ...")
-    stdout, stderr, rc = run_cmd(["adb", "install", "-r", apk_path], timeout=90)
+    stdout, stderr, rc = run_cmd(["adb", "install", "-r", "--bypass-low-target-sdk-block", apk_path], timeout=90)
 
     combined = (stdout + stderr).lower()
     if rc == 0 and "success" in combined:
@@ -83,7 +84,7 @@ def uninstall_package(package: str) -> bool:
 
 # ── Package Name ──────────────────────────────────────────────────────────────
 
-def extract_package_name(apk_path: str) -> str | None:
+def extract_package_name(apk_path: str) -> Optional[str]:
     """
     Use aapt to pull the package name from the APK manifest.
     Command: aapt dump badging <apk>  -- look for 'package: name='
@@ -125,7 +126,7 @@ def extract_permissions(apk_path: str) -> list[str]:
 
 # ── App Launch ────────────────────────────────────────────────────────────────
 
-def get_launcher_activity(apk_path: str) -> str | None:
+def get_launcher_activity(apk_path: str) -> Optional[str]:
     """
     Extract the main launcher activity via aapt.
     Command: aapt dump badging <apk>  → look for launchable-activity
@@ -140,7 +141,7 @@ def get_launcher_activity(apk_path: str) -> str | None:
     return None
 
 
-def launch_app(package: str, activity: str | None = None) -> tuple[bool, str]:
+def launch_app(package: str, activity: Optional[str] = None) -> tuple[bool, str]:
     """
     Launch app on device.
     With activity: adb shell am start -n <package>/<activity>

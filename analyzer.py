@@ -14,7 +14,7 @@ import adb_utils
 
 class SandboxAnalyzer:
     def __init__(self, apk_path: str, output_dir: str = "output"):
-        self.apk_path = os.path.abspath(apk_path)
+        self.apk_path = os.path.abspath(os.path.expanduser(apk_path))
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 

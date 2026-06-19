@@ -44,3 +44,4 @@ xcuserdata/
 *.swp
 *.lock
 *.log
+.vercel

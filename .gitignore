@@ -12,3 +12,4 @@ ghostrun/build/
 ghostrun/.flutter-plugins
 ghostrun/.flutter-plugins-dependencies
 ghostrun/pubspec.lock
+.vercel

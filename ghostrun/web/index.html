@@ -31,6 +31,7 @@
 
   <title>ghostrun</title>
   <link rel="manifest" href="manifest.json">
+  <script src="https://github.com/corbado/flutter-passkeys/releases/download/2.4.0/bundle.js"></script>
 </head>
 <body>
   <!--
@@ -41,6 +42,9 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    window.flutterWebRenderer = "html";
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

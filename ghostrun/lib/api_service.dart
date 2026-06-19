@@ -50,4 +50,19 @@ class ApiService {
       return {"status": "error"};
     }
   }
+
+  static Future<List<String>> fetchArticleContent(String url) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/news/content?url=${Uri.encodeComponent(url)}'));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        return List<String>.from(data['paragraphs'] ?? []);
+      } else {
+        throw Exception('Failed to load article content');
+      }
+    } catch (e) {
+      print('Error fetching article content: $e');
+      return [];
+    }
+  }
 }

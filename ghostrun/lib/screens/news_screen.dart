@@ -145,7 +145,7 @@ class _NewsScreenState extends State<NewsScreen> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: Image.network(
-                              'http://127.0.0.1:8001/api/news/image?url=${Uri.encodeComponent(article['image_url'])}',
+                              'https://ghostrun-mq5v.onrender.com/api/news/image?url=${Uri.encodeComponent(article['image_url'])}',
                               width: double.infinity,
                               height: 220,
                               fit: BoxFit.cover,
@@ -434,7 +434,7 @@ class _NewsScreenState extends State<NewsScreen> {
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: Image.network(
-                'http://127.0.0.1:8001/api/news/image?url=${Uri.encodeComponent(imageUrl)}',
+                'https://ghostrun-mq5v.onrender.com/api/news/image?url=${Uri.encodeComponent(imageUrl)}',
                 height: 180,
                 width: double.infinity,
                 fit: BoxFit.cover,

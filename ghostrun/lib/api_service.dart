@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // 10.0.2.2 is for Android emulator; 127.0.0.1 is for web/desktop/Windows run
-  static const String baseUrl = 'http://127.0.0.1:8001/api';
+  static const String baseUrl = 'https://ghostrun-mq5v.onrender.com/api';
 
   static Future<List<dynamic>> fetchNews() async {
     try {

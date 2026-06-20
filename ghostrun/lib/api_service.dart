@@ -1,10 +1,28 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'https://ghostrun-mq5v.onrender.com/api';
-  static const String wsUrl = 'wss://ghostrun-mq5v.onrender.com/ws/alerts';
+  static String get baseUrl {
+    if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host == 'localhost' || host == '127.0.0.1') {
+        return 'http://localhost:8001/api';
+      }
+    }
+    return 'https://ghostrun-mq5v.onrender.com/api';
+  }
+
+  static String get wsUrl {
+    if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host == 'localhost' || host == '127.0.0.1') {
+        return 'ws://localhost:8001/ws/alerts';
+      }
+    }
+    return 'wss://ghostrun-mq5v.onrender.com/ws/alerts';
+  }
 
   // ── News ──────────────────────────────────────────────────────────────────
 

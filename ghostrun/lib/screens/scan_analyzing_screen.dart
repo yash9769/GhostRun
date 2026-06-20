@@ -1,63 +1,153 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ghost_widgets.dart';
-import '../widgets/radar_widget.dart';
 import '../api_service.dart';
 
 class ScanAnalyzingScreen extends StatefulWidget {
-  final VoidCallback onNext;
+  final Function({String? scanId}) onNext;
+  final String? fileId;
 
-  const ScanAnalyzingScreen({super.key, required this.onNext});
+  const ScanAnalyzingScreen({super.key, required this.onNext, this.fileId});
 
   @override
   State<ScanAnalyzingScreen> createState() => _ScanAnalyzingScreenState();
 }
 
-class _ScanAnalyzingScreenState extends State<ScanAnalyzingScreen> {
-  int _stepIndex = 0; // 0=integrity, 1=signatures, 2=heuristics
+class _ScanAnalyzingScreenState extends State<ScanAnalyzingScreen>
+    with TickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
+  late AnimationController _progressCtrl;
+  late Animation<double> _pulseAnim;
 
-  final List<Map<String, dynamic>> _logs = [
-    {'time': '14:22:01', 'msg': 'Unpacking packet headers... OK'},
-    {'time': '14:22:03', 'msg': 'Cross-referencing global\ndatabase...'},
-    {'time': '14:22:05', 'msg': 'Comparing signature SHA-256:\n8f3a...11e'},
-    {'time': '14:22:08', 'msg': 'Initiating heuristic pattern\nrecognition', 'dot': true},
+  String? _scanId;
+  String _phase = 'analyzing';
+  double _progress = 0.0;
+  Timer? _pollTimer;
+  final List<String> _liveLog = [];
+  final _rng = Random();
+
+  // AI simulation log messages per phase
+  final _analyzingLogs = [
+    '> Initializing GhostRun sandbox engine v4.2...',
+    '> Loading YARA ruleset (42,817 signatures)...',
+    '> Mounting isolated execution environment...',
+    '> Intercepting system call table...',
+    '> Attaching behavioral tracer to PID 4821...',
+    '> Static entropy analysis: 7.82 bits/byte',
+    '> Extracting embedded strings from binary...',
+    '> Cross-referencing against threat intelligence feeds...',
   ];
+  final _sandboxLogs = [
+    '> [SYSCALL] openat("/data/data/...", O_RDONLY) → fd=12',
+    '> [NET] DNS query: api.analytics-tracker.com → 185.112.14.8',
+    '> [PERM] Attempting READ_CONTACTS — MONITORED',
+    '> [PERM] Attempting CAMERA access — FLAGGED',
+    '> [SYSCALL] connect(185.112.14.8:443) TCP — INTERCEPTED',
+    '> [FS] Writing to /sdcard/tmp/.hidden_cache — SUSPICIOUS',
+    '> [NET] TLS handshake with unknown cert (SHA1 mismatch)',
+    '> [PERM] RECEIVE_BOOT_COMPLETED registered — PERSISTENCE',
+    '> [SYSCALL] ptrace(PTRACE_TRACEME) — ANTI-DEBUG DETECTED',
+    '> [NET] C2 beacon attempt blocked: malicious-sinkhole.net',
+  ];
+  final _vulnLogs = [
+    '> Mapping syscall traces to MITRE ATT&CK v14...',
+    '> T1429: Audio Capture detected (RECORD_AUDIO)',
+    '> T1636.001: Contact List enumeration (READ_CONTACTS)',
+    '> T1398: Boot persistence registered (RECEIVE_BOOT_COMPLETED)',
+    '> T1071: Command & Control over HTTP/S',
+    '> Bayesian threat scorer: posterior probability 0.87',
+    '> Generating AI threat intelligence summary...',
+    '> Finalizing risk assessment model...',
+  ];
+
+  int _logIndex = 0;
+  Timer? _logTimer;
+
+  final _phases = ['analyzing', 'sandbox', 'finding_vulnerabilities', 'completed'];
+  int _phaseIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _startRealScan();
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    _progressCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 8));
+    _pulseAnim = Tween<double>(begin: 0.6, end: 1.0).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    _progressCtrl.forward();
+
+    _startScan();
   }
 
-  void _startRealScan() async {
-    try {
-      // 1. Kick off the scan on the Python Backend
-      final res = await ApiService.startScan('user_123');
-      final scanId = res['scan_id'];
-      if (scanId == null) return;
+  Future<void> _startScan() async {
+    final result = await ApiService.startScan('user_001', fileId: widget.fileId);
+    if (mounted) {
+      _scanId = result['scan_id'];
+      _startLiveLog();
+      _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _pollStatus());
+    }
+  }
 
-      // 2. Poll the API for status updates mimicking our UI flow
-      while (mounted) {
-        await Future.delayed(const Duration(seconds: 1));
-        final statusRes = await ApiService.getScanStatus(scanId);
-        final status = statusRes['status'];
-        
-        if (!mounted) break;
+  void _startLiveLog() {
+    _logTimer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+      if (!mounted) return;
+      List<String> pool;
+      if (_phaseIndex == 0) pool = _analyzingLogs;
+      else if (_phaseIndex == 1) pool = _sandboxLogs;
+      else pool = _vulnLogs;
 
-        if (status == 'sandbox') {
-          setState(() => _stepIndex = 1);
-        } else if (status == 'finding_vulnerabilities') {
-          setState(() => _stepIndex = 2);
-        } else if (status == 'completed' || status == 'failed') {
-          widget.onNext();
-          break;
-        }
+      if (_liveLog.length < 30) {
+        final msg = pool[_logIndex % pool.length];
+        setState(() {
+          _liveLog.add(msg);
+          _logIndex++;
+        });
       }
-    } catch (e) {
-      print('API Error: $e');
-      // Fallback for safety so app doesn't freeze if server crashes
-      widget.onNext();
+    });
+  }
+
+  Future<void> _pollStatus() async {
+    if (_scanId == null) return;
+    final status = await ApiService.getScanStatus(_scanId!);
+    if (!mounted) return;
+
+    final serverPhase = status['status'] as String;
+    final phaseIdx = _phases.indexOf(serverPhase);
+    setState(() {
+      _phase = serverPhase;
+      _phaseIndex = phaseIdx.clamp(0, 3);
+      _progress = (phaseIdx + 1) / _phases.length;
+    });
+
+    if (serverPhase == 'completed') {
+      _pollTimer?.cancel();
+      _logTimer?.cancel();
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) widget.onNext(scanId: _scanId);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    _progressCtrl.dispose();
+    _pollTimer?.cancel();
+    _logTimer?.cancel();
+    super.dispose();
+  }
+
+  Color get _phaseColor => _phaseIndex < 2
+      ? AppTheme.accentBlue
+      : _phaseIndex == 2 ? AppTheme.accentOrange : AppTheme.accentGreen;
+
+  String get _phaseLabel {
+    switch (_phase) {
+      case 'analyzing': return 'STATIC ANALYSIS';
+      case 'sandbox': return 'SANDBOX EXECUTION';
+      case 'finding_vulnerabilities': return 'THREAT MAPPING';
+      case 'completed': return 'COMPLETE';
+      default: return 'INITIALIZING';
     }
   }
 
@@ -70,40 +160,17 @@ class _ScanAnalyzingScreenState extends State<ScanAnalyzingScreen> {
           _buildAppBar(context),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  const SizedBox(height: 40),
-                  const RadarWidget(size: 220, isScanning: true),
-                  const SizedBox(height: 36),
-                  Text(
-                    'Analyzing file in secure\nsandbox',
-                    style: AppTheme.headingM.copyWith(fontSize: 24),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppTheme.textMuted,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'SYSTEM THREAT LEVEL: NEUTRAL',
-                        style: AppTheme.labelXS,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 36),
-                  _buildStepProgress(),
+                  const SizedBox(height: 16),
+                  _buildPulsingOrb(),
                   const SizedBox(height: 28),
-                  _buildActivityLog(),
+                  _buildPhaseIndicators(),
+                  const SizedBox(height: 24),
+                  _buildProgressBar(),
+                  const SizedBox(height: 24),
+                  _buildLiveTerminal(),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -119,153 +186,131 @@ class _ScanAnalyzingScreenState extends State<ScanAnalyzingScreen> {
       color: AppTheme.bgSecondary,
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 8,
-        left: 16,
-        right: 16,
-        bottom: 12,
+        left: 20, right: 20, bottom: 12,
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppTheme.bgCardLight,
-              border: Border.all(color: AppTheme.borderLight),
-            ),
-            child: const Icon(Icons.person, color: AppTheme.textMuted, size: 22),
+      child: Row(children: [
+        GhostChip(label: 'SCANNING', color: _phaseColor),
+        const Spacer(),
+        Text('GHOSTRUN SCANNER',
+            style: AppTheme.labelXS.copyWith(color: AppTheme.textMuted)),
+      ]),
+    );
+  }
+
+  Widget _buildPulsingOrb() {
+    return AnimatedBuilder(
+      animation: _pulseAnim,
+      builder: (_, __) => Container(
+        width: 140,
+        height: 140,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _phaseColor.withOpacity(0.08 * _pulseAnim.value),
+          border: Border.all(color: _phaseColor.withOpacity(0.4 * _pulseAnim.value), width: 2),
+          boxShadow: [BoxShadow(color: _phaseColor.withOpacity(0.3 * _pulseAnim.value), blurRadius: 40, spreadRadius: 10)],
+        ),
+        child: Center(
+          child: Icon(
+            _phaseIndex == 0 ? Icons.search_rounded
+                : _phaseIndex == 1 ? Icons.precision_manufacturing_rounded
+                : _phaseIndex == 2 ? Icons.bug_report_rounded
+                : Icons.check_circle_rounded,
+            color: _phaseColor,
+            size: 54,
           ),
-          const SizedBox(width: 10),
-          Text(
-            'GHOSTRUN',
-            style: GoogleFonts.rajdhani(
-              color: AppTheme.accentBlue,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 3,
-            ),
-          ),
-          const Spacer(),
-          const Icon(Icons.settings, color: AppTheme.textMuted, size: 24),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildStepProgress() {
-    final steps = [
-      {'label': 'INTEGRITY', 'icon': Icons.check_rounded},
-      {'label': 'SIGNATURES', 'icon': Icons.fingerprint_rounded},
-      {'label': 'HEURISTICS', 'icon': Icons.psychology_outlined},
-    ];
-
+  Widget _buildPhaseIndicators() {
+    final labels = ['Static\nAnalysis', 'Sandbox\nExec', 'MITRE\nMapping', 'Complete'];
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(steps.length, (i) {
-        final done = i < _stepIndex;
-        final active = i == _stepIndex;
-        final color = done || active ? AppTheme.accentBlue : AppTheme.textMuted;
-
-        return Row(
-          children: [
-            Column(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 400),
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: (done || active)
-                        ? AppTheme.accentBlue.withOpacity(active ? 1.0 : 0.3)
-                        : AppTheme.bgCard,
-                    border: Border.all(
-                      color: (done || active)
-                          ? AppTheme.accentBlue
-                          : AppTheme.borderColor,
-                      width: 2,
-                    ),
-                  ),
-                  child: Icon(
-                    steps[i]['icon'] as IconData,
-                    color: (done || active) ? Colors.white : AppTheme.textMuted,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  steps[i]['label'] as String,
-                  style: AppTheme.labelXS.copyWith(
-                    color: color,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-            if (i < steps.length - 1)
-              Container(
-                width: 40,
-                height: 1.5,
-                margin: const EdgeInsets.only(bottom: 28),
-                color: i < _stepIndex ? AppTheme.accentBlue : AppTheme.borderColor,
+      children: List.generate(4, (i) {
+        final done = i < _phaseIndex;
+        final active = i == _phaseIndex;
+        final color = done || active ? _phaseColor : AppTheme.textDim;
+        return Row(children: [
+          Column(children: [
+            Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: done ? _phaseColor : active ? _phaseColor.withOpacity(0.2) : AppTheme.bgCard,
+                border: Border.all(color: color, width: 2),
               ),
-          ],
-        );
+              child: Icon(done ? Icons.check_rounded : Icons.circle, color: done ? Colors.white : color, size: done ? 16 : 6),
+            ),
+            const SizedBox(height: 4),
+            Text(labels[i], textAlign: TextAlign.center, style: AppTheme.labelXS.copyWith(color: color, fontSize: 9)),
+          ]),
+          if (i < 3)
+            Container(width: 32, height: 2, color: done ? _phaseColor : AppTheme.borderColor),
+        ]);
       }),
     );
   }
 
-  Widget _buildActivityLog() {
+  Widget _buildProgressBar() {
+    return Column(
+      children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(_phaseLabel, style: AppTheme.labelXS.copyWith(color: _phaseColor)),
+          Text('${(_progress * 100).toInt()}%', style: AppTheme.mono.copyWith(color: _phaseColor, fontSize: 13)),
+        ]),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: _progress,
+            minHeight: 6,
+            backgroundColor: AppTheme.borderColor,
+            valueColor: AlwaysStoppedAnimation(_phaseColor),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLiveTerminal() {
     return GhostCard(
+      color: const Color(0xFF0A0D14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                'LIVE ACTIVITY LOG',
-                style: AppTheme.labelXS.copyWith(color: AppTheme.textSecondary),
-              ),
-              const Spacer(),
-              Text('SESSION_ID: GH-0922', style: AppTheme.monoMuted),
-            ],
+          Row(children: [
+            Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.accentRed)),
+            const SizedBox(width: 6),
+            Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.accentOrange)),
+            const SizedBox(width: 6),
+            Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: AppTheme.accentGreen)),
+            const SizedBox(width: 12),
+            Text('ghostrun@sandbox:~\$', style: AppTheme.mono.copyWith(color: AppTheme.textMuted, fontSize: 11)),
+          ]),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 220,
+            child: ListView.builder(
+              reverse: true,
+              itemCount: _liveLog.length,
+              itemBuilder: (_, i) {
+                final line = _liveLog[_liveLog.length - 1 - i];
+                Color lineColor = AppTheme.accentGreen;
+                if (line.contains('FLAGGED') || line.contains('SUSPICIOUS') || line.contains('BLOCKED') || line.contains('ANTI-DEBUG')) {
+                  lineColor = AppTheme.accentRed;
+                } else if (line.contains('MONITORED') || line.contains('INTERCEPTED') || line.contains('PERSISTENCE')) {
+                  lineColor = AppTheme.accentOrange;
+                } else if (line.contains('T1') || line.contains('MITRE')) {
+                  lineColor = AppTheme.accentPurple;
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(line, style: AppTheme.mono.copyWith(color: lineColor, fontSize: 11, height: 1.5)),
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 16),
-          ...List.generate(_logs.length, (i) {
-            final log = _logs[i];
-            final hasDot = log['dot'] == true;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (hasDot)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4, right: 6),
-                      child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppTheme.textMuted,
-                        ),
-                      ),
-                    ),
-                  Text(
-                    '[${log['time']}]',
-                    style: AppTheme.monoMuted,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      log['msg'] as String,
-                      style: AppTheme.mono,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
         ],
       ),
     );

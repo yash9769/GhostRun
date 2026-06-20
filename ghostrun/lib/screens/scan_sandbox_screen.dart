@@ -4,7 +4,7 @@ import '../theme/app_theme.dart';
 import '../widgets/ghost_widgets.dart';
 
 class ScanSandboxScreen extends StatefulWidget {
-  final VoidCallback onNext;
+  final Function({String? scanId}) onNext;
   const ScanSandboxScreen({super.key, required this.onNext});
 
   @override

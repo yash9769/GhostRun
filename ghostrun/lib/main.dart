@@ -44,21 +44,26 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _tabIndex = 0;
 
-  // Scan sub-screen: 0=analyzing, 1=sandbox, 2=vulnerabilities, 3=result
-  int _scanStep = 0;
+  // Scan flow
+  int _scanStep = 0; // 0=analyzing, 1=sandbox, 2=vulns, 3=result
+  String? _currentScanId;
+  String? _currentFileId;
 
-  // News sub-screen: 0=news, 1=community
+  // News sub-tab
   int _newsSubIndex = 0;
 
-  void _startScan() {
+  void _startScan({String? fileId}) {
     setState(() {
       _tabIndex = 1;
       _scanStep = 0;
+      _currentScanId = null;
+      _currentFileId = fileId;
     });
   }
 
-  void _advanceScanStep() {
+  void _advanceScanStep({String? scanId}) {
     setState(() {
+      if (scanId != null) _currentScanId = scanId;
       _scanStep = (_scanStep + 1).clamp(0, 3);
     });
   }
@@ -73,18 +78,24 @@ class _MainShellState extends State<MainShell> {
   Widget _buildScanBody() {
     switch (_scanStep) {
       case 0:
-        return ScanAnalyzingScreen(onNext: _advanceScanStep);
+        return ScanAnalyzingScreen(
+          onNext: _advanceScanStep,
+          fileId: _currentFileId,
+        );
       case 1:
         return ScanSandboxScreen(onNext: _advanceScanStep);
       case 2:
         return ScanVulnerabilitiesScreen(onNext: _advanceScanStep);
       case 3:
-        return ScanResultScreen(onDone: () {
-          setState(() {
+        return ScanResultScreen(
+          scanId: _currentScanId,
+          onDone: () => setState(() {
             _tabIndex = 0;
             _scanStep = 0;
-          });
-        });
+            _currentScanId = null;
+            _currentFileId = null;
+          }),
+        );
       default:
         return ScanAnalyzingScreen(onNext: _advanceScanStep);
     }
@@ -107,7 +118,7 @@ class _MainShellState extends State<MainShell> {
         body = _buildScanBody();
         break;
       case 2:
-        body = const FilePreviewScreen();
+        body = FilePreviewScreen(onStartScan: _startScan);
         break;
       case 3:
         body = _buildNewsBody();
@@ -143,10 +154,7 @@ class _GhostBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  const _GhostBottomNav({
-    required this.currentIndex,
-    required this.onTap,
-  });
+  const _GhostBottomNav({required this.currentIndex, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -160,9 +168,7 @@ class _GhostBottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.bgSecondary,
-        border: Border(
-          top: BorderSide(color: AppTheme.borderColor, width: 1),
-        ),
+        border: Border(top: BorderSide(color: AppTheme.borderColor, width: 1)),
       ),
       child: SafeArea(
         top: false,
@@ -178,25 +184,25 @@ class _GhostBottomNav extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        items[i].icon,
-                        color: selected
-                            ? AppTheme.accentBlue
-                            : AppTheme.textMuted,
-                        size: 22,
-                      ),
+                      Icon(items[i].icon,
+                          color: selected ? AppTheme.accentBlue : AppTheme.textMuted,
+                          size: 22),
                       const SizedBox(height: 4),
-                      Text(
-                        items[i].label,
-                        style: GoogleFonts.rajdhani(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1,
-                          color: selected
-                              ? AppTheme.accentBlue
-                              : AppTheme.textMuted,
+                      Text(items[i].label,
+                          style: GoogleFonts.rajdhani(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1,
+                              color: selected ? AppTheme.accentBlue : AppTheme.textMuted)),
+                      if (selected)
+                        Container(
+                          margin: const EdgeInsets.only(top: 3),
+                          width: 16, height: 2,
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentBlue,
+                            borderRadius: BorderRadius.circular(1),
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),

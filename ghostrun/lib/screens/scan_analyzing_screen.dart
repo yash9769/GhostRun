@@ -81,11 +81,15 @@ class _ScanAnalyzingScreenState extends State<ScanAnalyzingScreen>
   }
 
   Future<void> _startScan() async {
-    final result = await ApiService.startScan('user_001', fileId: widget.fileId);
-    if (mounted) {
-      _scanId = result['scan_id'];
-      _startLiveLog();
-      _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _pollStatus());
+    try {
+      final result = await ApiService.startScan('user_001', fileId: widget.fileId);
+      if (mounted) {
+        _scanId = result['scan_id']?.toString();
+        _startLiveLog();
+        _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _pollStatus());
+      }
+    } catch (e) {
+      print('Error starting scan: $e');
     }
   }
 
@@ -109,22 +113,26 @@ class _ScanAnalyzingScreenState extends State<ScanAnalyzingScreen>
 
   Future<void> _pollStatus() async {
     if (_scanId == null) return;
-    final status = await ApiService.getScanStatus(_scanId!);
-    if (!mounted) return;
+    try {
+      final status = await ApiService.getScanStatus(_scanId!);
+      if (!mounted) return;
 
-    final serverPhase = status['status'] as String;
-    final phaseIdx = _phases.indexOf(serverPhase);
-    setState(() {
-      _phase = serverPhase;
-      _phaseIndex = phaseIdx.clamp(0, 3);
-      _progress = (phaseIdx + 1) / _phases.length;
-    });
+      final serverPhase = status['status']?.toString() ?? 'error';
+      final phaseIdx = _phases.indexOf(serverPhase);
+      setState(() {
+        _phase = serverPhase;
+        _phaseIndex = phaseIdx.clamp(0, 3);
+        _progress = (phaseIdx + 1) / _phases.length;
+      });
 
-    if (serverPhase == 'completed') {
-      _pollTimer?.cancel();
-      _logTimer?.cancel();
-      await Future.delayed(const Duration(milliseconds: 800));
-      if (mounted) widget.onNext(scanId: _scanId);
+      if (serverPhase == 'completed') {
+        _pollTimer?.cancel();
+        _logTimer?.cancel();
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (mounted) widget.onNext(scanId: _scanId);
+      }
+    } catch (e) {
+      print('Error polling scan status: $e');
     }
   }
 

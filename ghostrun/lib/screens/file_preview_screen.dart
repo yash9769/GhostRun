@@ -1,5 +1,7 @@
+import 'dart:io' show File;
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
@@ -32,8 +34,17 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
       if (result == null || result.files.isEmpty) return;
 
       final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null) return;
+      Uint8List? bytes = file.bytes;
+      if (bytes == null && file.path != null && !kIsWeb) {
+        final ioFile = File(file.path!);
+        if (await ioFile.exists()) {
+          bytes = await ioFile.readAsBytes();
+        }
+      }
+
+      if (bytes == null) {
+        throw Exception('Could not read picked file. Please try again.');
+      }
 
       setState(() {
         _isUploading = true;
@@ -50,6 +61,10 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
       final result2 = await ApiService.inspectFile(
           Uint8List.fromList(bytes), file.name);
+
+      if (result2.containsKey('error')) {
+        throw Exception(result2['error']);
+      }
 
       if (mounted) {
         setState(() {

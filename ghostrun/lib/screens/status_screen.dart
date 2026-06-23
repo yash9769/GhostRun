@@ -408,18 +408,21 @@ class _RingPainter extends CustomPainter {
     final bgPaint = Paint()..color = bgColor..style = PaintingStyle.stroke..strokeWidth = sw..strokeCap = StrokeCap.round;
     canvas.drawCircle(Offset(cx, cy), r, bgPaint);
 
-    final fgPaint = Paint()
-      ..color = color..style = PaintingStyle.stroke..strokeWidth = sw..strokeCap = StrokeCap.round
-      ..shader = SweepGradient(
-        colors: [color.withOpacity(0.4), color],
-        startAngle: -pi / 2,
-        endAngle: -pi / 2 + 2 * pi * progress,
-      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r));
+    final double sweepAngle = 2 * pi * progress;
+    if (sweepAngle > 0.001) {
+      final fgPaint = Paint()
+        ..color = color..style = PaintingStyle.stroke..strokeWidth = sw..strokeCap = StrokeCap.round
+        ..shader = SweepGradient(
+          colors: [color.withOpacity(0.4), color],
+          startAngle: -pi / 2,
+          endAngle: -pi / 2 + sweepAngle,
+        ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r));
 
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy), radius: r),
-      -pi / 2, 2 * pi * progress, false, fgPaint,
-    );
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(cx, cy), radius: r),
+        -pi / 2, sweepAngle, false, fgPaint,
+      );
+    }
   }
 
   @override
@@ -434,15 +437,32 @@ class SettingsScreen extends StatefulWidget {
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
-
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _bgShield = true;
   bool _liveNotifs = true;
   int _sensitivity = 1;
-  final _urlCtrl = TextEditingController(text: 'https://ghostrun-mq5v.onrender.com');
+  late final TextEditingController _urlCtrl;
 
   @override
-  void dispose() { _urlCtrl.dispose(); super.dispose(); }
+  void initState() {
+    super.initState();
+    final currentUrl = ApiService.customBaseUrl.isNotEmpty
+        ? ApiService.customBaseUrl
+        : ApiService.baseUrl.replaceAll('/api', '');
+    _urlCtrl = TextEditingController(text: currentUrl);
+    _urlCtrl.addListener(_onUrlChanged);
+  }
+
+  void _onUrlChanged() {
+    ApiService.customBaseUrl = _urlCtrl.text.trim();
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.removeListener(_onUrlChanged);
+    _urlCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

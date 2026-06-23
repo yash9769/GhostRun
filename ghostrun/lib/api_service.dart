@@ -7,12 +7,23 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 
 class ApiService {
-  // Always use the Render backend for production mobile builds.
-  // On web localhost, use local server.
+  static String customBaseUrl = '';
+
   static String get baseUrl {
+    if (customBaseUrl.isNotEmpty) {
+      final url = customBaseUrl.trim();
+      return url.endsWith('/api') ? url : '$url/api';
+    }
     if (kIsWeb) {
       final host = Uri.base.host;
       if (host == 'localhost' || host == '127.0.0.1') {
+        return 'http://localhost:8001/api';
+      }
+    } else {
+      if (kDebugMode) {
+        if (defaultTargetPlatform == TargetPlatform.android) {
+          return 'http://10.0.2.2:8001/api';
+        }
         return 'http://localhost:8001/api';
       }
     }
@@ -20,9 +31,21 @@ class ApiService {
   }
 
   static String get wsUrl {
+    if (customBaseUrl.isNotEmpty) {
+      final url = customBaseUrl.trim();
+      final wsBase = url.replaceAll('https://', 'wss://').replaceAll('http://', 'ws://');
+      return wsBase.endsWith('/ws/alerts') ? wsBase : '$wsBase/ws/alerts';
+    }
     if (kIsWeb) {
       final host = Uri.base.host;
       if (host == 'localhost' || host == '127.0.0.1') {
+        return 'ws://localhost:8001/ws/alerts';
+      }
+    } else {
+      if (kDebugMode) {
+        if (defaultTargetPlatform == TargetPlatform.android) {
+          return 'ws://10.0.2.2:8001/ws/alerts';
+        }
         return 'ws://localhost:8001/ws/alerts';
       }
     }

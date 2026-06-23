@@ -34,6 +34,17 @@ scans_db: Dict[str, Any] = {}
 files_db: Dict[str, Any] = {}
 ws_connections: List[WebSocket] = []
 
+async def broadcast_alert(payload: Dict[str, Any]):
+    disconnected = []
+    for conn in ws_connections:
+        try:
+            await conn.send_json(payload)
+        except Exception:
+            disconnected.append(conn)
+    for conn in disconnected:
+        if conn in ws_connections:
+            ws_connections.remove(conn)
+
 threat_reports_db: List[Dict[str, Any]] = [
     {
         "id": "t1", "title": "Phishing SMS Campaign", "description": "Fake package delivery links targeting local area codes. Do not click short URLs from unknown senders.",
@@ -544,15 +555,15 @@ def generate_ai_summary(permissions: List[str], techniques: List[Dict], score: f
     return " ".join(summary_parts)
 
 # ── Background scan ───────────────────────────────────────────────────────────
-def perform_security_scan(scan_id: str, file_id: Optional[str] = None):
+async def perform_security_scan(scan_id: str, file_id: Optional[str] = None):
     """Real scan pipeline: uses file data if available, otherwise system checks."""
-    time.sleep(3)
+    await asyncio.sleep(3)
     scans_db[scan_id]["status"] = "sandbox"
 
-    time.sleep(3)
+    await asyncio.sleep(3)
     scans_db[scan_id]["status"] = "finding_vulnerabilities"
 
-    time.sleep(2)
+    await asyncio.sleep(2)
 
     file_info = files_db.get(file_id, {}) if file_id else {}
     raw_permissions = file_info.get("permissions", [])
@@ -632,6 +643,14 @@ def perform_security_scan(scan_id: str, file_id: Optional[str] = None):
             "mitre_techniques": detected_techniques,
         },
         "vulnerabilities": vulns,
+    })
+
+    await broadcast_alert({
+        "type": "scan_completed",
+        "scan_id": scan_id,
+        "verdict": verdict,
+        "score": score,
+        "vulnerabilities_count": len(vulns),
     })
 
 # ── API Routes ────────────────────────────────────────────────────────────────
@@ -728,7 +747,7 @@ def get_threats():
     return threat_reports_db
 
 @app.post("/api/threats/report")
-def report_threat(report: ThreatReport):
+async def report_threat(report: ThreatReport):
     new_report = {
         "id": str(uuid.uuid4()),
         **report.dict(),
@@ -736,10 +755,14 @@ def report_threat(report: ThreatReport):
         "upvotes": 0, "downvotes": 0, "verified": False,
     }
     threat_reports_db.append(new_report)
+    await broadcast_alert({
+        "type": "threat_reported",
+        "threat": new_report,
+    })
     return new_report
 
 @app.post("/api/threats/{threat_id}/vote")
-def vote_threat(threat_id: str, upvote: bool = True):
+async def vote_threat(threat_id: str, upvote: bool = True):
     for t in threat_reports_db:
         if t["id"] == threat_id:
             if upvote:
@@ -748,6 +771,10 @@ def vote_threat(threat_id: str, upvote: bool = True):
                     t["verified"] = True
             else:
                 t["downvotes"] += 1
+            await broadcast_alert({
+                "type": "threat_voted",
+                "threat": t,
+            })
             return t
     raise HTTPException(status_code=404, detail="Threat not found")
 

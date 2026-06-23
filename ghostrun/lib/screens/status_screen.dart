@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ghost_widgets.dart';
 import '../api_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class StatusScreen extends StatefulWidget {
   final Function({String? fileId}) onStartScan;
@@ -24,6 +25,10 @@ class _StatusScreenState extends State<StatusScreen>
   bool _openWifi = false;
   int _sideloadedApps = 0;
 
+  // Real device info
+  Map<String, dynamic> _deviceInfo = {};
+  Map<String, dynamic> _networkInfo = {};
+
   Map<String, dynamic>? _scoreData;
   bool _loadingScore = false;
 
@@ -32,6 +37,23 @@ class _StatusScreenState extends State<StatusScreen>
     super.initState();
     _scoreCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500));
     _scoreAnim = CurvedAnimation(parent: _scoreCtrl, curve: Curves.easeOutCubic);
+    _loadDeviceContext();
+  }
+
+  Future<void> _loadDeviceContext() async {
+    // Request location permission (needed to read Wi-Fi SSID on Android 8.1+)
+    await Permission.locationWhenInUse.request();
+
+    final deviceInfo = await ApiService.getRealDeviceInfo();
+    final networkInfo = await ApiService.getRealNetworkInfo();
+    if (mounted) {
+      setState(() {
+        _deviceInfo = deviceInfo;
+        _networkInfo = networkInfo;
+        _developerMode = deviceInfo['developer_mode'] as bool? ?? false;
+        _openWifi = networkInfo['on_wifi'] as bool? ?? false;
+      });
+    }
     _refreshScore();
   }
 
@@ -45,8 +67,8 @@ class _StatusScreenState extends State<StatusScreen>
     setState(() => _loadingScore = true);
     _scoreCtrl.reset();
     final data = await ApiService.computeDeviceScore({
-      'os_version': 'Android 14',
-      'is_rooted': false,
+      'os_version': _deviceInfo['os_version'] ?? 'Android',
+      'is_rooted': _deviceInfo['is_rooted'] ?? false,
       'developer_mode': _developerMode,
       'unknown_sources': _unknownSources,
       'last_os_update_days': 12,
@@ -314,14 +336,17 @@ class _StatusScreenState extends State<StatusScreen>
   }
 
   Widget _buildStatusGrid() {
+    final osVersion = _deviceInfo['os_version'] as String? ?? 'Android';
+    final isRooted = _deviceInfo['is_rooted'] as bool? ?? false;
     final items = [
-      {'label': 'OS Version', 'value': 'Android 14', 'icon': Icons.android_rounded, 'ok': true},
+      {'label': 'OS Version', 'value': osVersion, 'icon': Icons.android_rounded, 'ok': true},
       {'label': 'Last OS Update', 'value': '12 days ago', 'icon': Icons.update_rounded, 'ok': true},
-      {'label': 'Root Status', 'value': 'Not Rooted', 'icon': Icons.lock_rounded, 'ok': true},
+      {'label': 'Root Status', 'value': isRooted ? 'ROOTED' : 'Not Rooted', 'icon': Icons.lock_rounded, 'ok': !isRooted},
       {'label': 'Dev Mode', 'value': _developerMode ? 'ENABLED' : 'Disabled', 'icon': Icons.developer_mode_rounded, 'ok': !_developerMode},
       {'label': 'Unknown Sources', 'value': _unknownSources ? 'ENABLED' : 'Disabled', 'icon': Icons.source_rounded, 'ok': !_unknownSources},
       {'label': 'Sideloaded Apps', 'value': '$_sideloadedApps apps', 'icon': Icons.install_mobile_rounded, 'ok': _sideloadedApps == 0},
     ];
+
     return GhostCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -771,11 +796,36 @@ class NetworkAuditorScreen extends StatefulWidget {
 }
 
 class _NetworkAuditorScreenState extends State<NetworkAuditorScreen> {
-  final _ssidCtrl = TextEditingController(text: 'HomeNetwork_5G');
+  final _ssidCtrl = TextEditingController(text: 'Scanning...');
   String _encryption = 'WPA2';
   bool _loading = false;
+  bool _loadingNetwork = true;
   Map<String, dynamic>? _result;
+  Map<String, dynamic> _networkInfo = {};
+  int _signalStrength = -65;
   final _encryptions = ['WPA3', 'WPA2', 'WEP', 'Open'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRealNetwork();
+  }
+
+  Future<void> _loadRealNetwork() async {
+    final info = await ApiService.getRealNetworkInfo();
+    if (mounted) {
+      setState(() {
+        _networkInfo = info;
+        _loadingNetwork = false;
+        final ssid = info['ssid'] as String? ?? '';
+        if (ssid.isNotEmpty && ssid != 'Unknown' && ssid != 'Cellular') {
+          _ssidCtrl.text = ssid;
+        } else {
+          _ssidCtrl.text = '';
+        }
+      });
+    }
+  }
 
   @override
   void dispose() { _ssidCtrl.dispose(); super.dispose(); }
@@ -784,8 +834,9 @@ class _NetworkAuditorScreenState extends State<NetworkAuditorScreen> {
     setState(() { _loading = true; _result = null; });
     final res = await ApiService.auditNetwork({
       'ssid': _ssidCtrl.text,
+      'bssid': _networkInfo['bssid'],
       'encryption': _encryption,
-      'signal_strength': -65,
+      'signal_strength': _signalStrength,
     });
     if (mounted) setState(() { _result = res; _loading = false; });
   }
@@ -815,13 +866,67 @@ class _NetworkAuditorScreenState extends State<NetworkAuditorScreen> {
           Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(children: [
             GhostCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('NETWORK PROFILE', style: AppTheme.labelXS),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
+              // Show detected network info
+              if (_loadingNetwork)
+                const LinearProgressIndicator(color: AppTheme.accentOrange, backgroundColor: AppTheme.bgCardLight)
+              else if (_networkInfo['on_wifi'] == true)
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentGreen.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.accentGreen.withOpacity(0.3)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.wifi_rounded, color: AppTheme.accentGreen, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Auto-detected: ${_networkInfo['ssid'] ?? 'Unknown'}',
+                          style: AppTheme.bodyM.copyWith(color: AppTheme.accentGreen, fontSize: 12)),
+                      if (_networkInfo['bssid'] != null && _networkInfo['bssid'] != 'Unknown')
+                        Text('BSSID: ${_networkInfo['bssid']}', style: AppTheme.bodyS.copyWith(fontSize: 10)),
+                    ])),
+                  ]),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.bgCardLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.borderColor),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.wifi_off_rounded, color: AppTheme.textMuted, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Not on Wi-Fi — enter SSID manually',
+                        style: AppTheme.bodyS.copyWith(fontSize: 11)),
+                  ]),
+                ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _ssidCtrl,
                 style: AppTheme.bodyM.copyWith(color: AppTheme.textPrimary),
                 decoration: _inputDec('Network Name (SSID)'),
               ),
               const SizedBox(height: 12),
+              // Signal strength slider
+              Row(children: [
+                const Icon(Icons.signal_cellular_alt_rounded, color: AppTheme.textMuted, size: 16),
+                const SizedBox(width: 8),
+                Text('Signal Strength: $_signalStrength dBm', style: AppTheme.bodyM),
+              ]),
+              Slider(
+                value: _signalStrength.toDouble(),
+                min: -100,
+                max: -30,
+                divisions: 70,
+                activeColor: _signalStrength > -60 ? AppTheme.accentGreen : _signalStrength > -75 ? AppTheme.accentOrange : AppTheme.accentRed,
+                inactiveColor: AppTheme.bgCardLight,
+                onChanged: (v) => setState(() => _signalStrength = v.toInt()),
+              ),
+              const SizedBox(height: 4),
               Text('ENCRYPTION TYPE', style: AppTheme.labelXS),
               const SizedBox(height: 8),
               Wrap(spacing: 8, children: _encryptions.map((e) => GestureDetector(
@@ -853,6 +958,7 @@ class _NetworkAuditorScreenState extends State<NetworkAuditorScreen> {
                 ),
               ),
             ])),
+
             if (_result != null) ...[
               const SizedBox(height: 16),
               // Result card

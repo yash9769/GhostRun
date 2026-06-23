@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
@@ -42,7 +43,9 @@ class _StatusScreenState extends State<StatusScreen>
 
   Future<void> _loadDeviceContext() async {
     // Request location permission (needed to read Wi-Fi SSID on Android 8.1+)
-    await Permission.locationWhenInUse.request();
+    if (!kIsWeb) {
+      await Permission.locationWhenInUse.request();
+    }
 
     final deviceInfo = await ApiService.getRealDeviceInfo();
     final networkInfo = await ApiService.getRealNetworkInfo();
